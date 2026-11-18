@@ -17,6 +17,7 @@ import "Location.js" as Location
 import "Messages.js" as Messages
 import "Paths.js" as Paths
 import "Util.js" as Util
+import "BarStyle.js" as BarStyle
 
 Item {
   id: root
@@ -84,6 +85,13 @@ Item {
     var seen = parseProbe(text)
     root.savedState = seen.state
     root.zone = seen.zone
+    if (root.barBackgrounds === null) {
+      var stored = seen.state.barBackgrounds
+      root.barBackgrounds = (stored && typeof stored === "object") ? stored : {}
+      checkBar(false)
+    } else {
+      root.savedState.barBackgrounds = root.barBackgrounds
+    }
 
     // Weather location first; otherwise Omarchy's geo endpoint, cached in the
     // state file. Location.js decides when to ask again.
@@ -114,6 +122,65 @@ Item {
     var wait = result.next.at - Date.now() + 500
     timer.interval = Math.max(1000, Math.min(root.maxIntervalMs, wait))
     timer.restart()
+  }
+
+  // The bar background remembered per period (BarStyle.js). Kept here as well
+  // as in savedState, so a probe that read the state file just before a save
+  // cannot lose it. Null until the first probe has read the state file.
+  property var barBackgrounds: null
+  // The theme the last bar check saw, from theme.name.
+  property string barTheme: ""
+  // A background Daylight just set that shell.json does not show yet. Until it
+  // does, a shell.json reload is not the person changing the background.
+  property string pendingBackground: ""
+
+  function checkBar(themeChanged) {
+    if (root.barBackgrounds === null || !root.settingsLoaded || root.barTheme === "") return
+    var background = BarStyle.backgroundOf(root.shellJson)
+    if (root.pendingBackground !== "" && !themeChanged) {
+      if (background !== root.pendingBackground) return
+      root.pendingBackground = ""
+    }
+    var result = BarStyle.reconcile({
+      period: BarStyle.periodOf(root.barTheme, settings()),
+      themeChanged: themeChanged,
+      background: background,
+      saved: root.barBackgrounds
+    })
+    if (result.changed) {
+      root.barBackgrounds = result.saved
+      root.savedState.barBackgrounds = result.saved
+      saveState()
+    }
+    if (result.apply) {
+      root.pendingBackground = result.apply
+      pendingTimeout.restart()
+      Commons.Util.execArgv(["omarchy", "bar", "background", result.apply])
+    }
+  }
+
+  // Gives up on a background that never reached shell.json (the command
+  // failed), so later changes are remembered again.
+  Timer {
+    id: pendingTimeout
+    interval: 15000
+    repeat: false
+    onTriggered: root.pendingBackground = ""
+  }
+
+  // A theme change from anywhere (Daylight, Switch now, the theme menu)
+  // restores that period's bar background.
+  FileView {
+    path: root.files.themeNameFile
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      var name = text().trim()
+      var changed = root.barTheme !== "" && name !== root.barTheme
+      root.barTheme = name
+      root.checkBar(changed)
+    }
   }
 
   // One request to the endpoint Omarchy's own weather widget uses. The size
@@ -199,6 +266,7 @@ Item {
     onLoaded: {
       try { root.shellJson = JSON.parse(text()) } catch (e) { root.shellJson = null }
       root.settingsLoaded = true
+      root.checkBar(false)
       root.tick()
     }
     onLoadFailed: {
