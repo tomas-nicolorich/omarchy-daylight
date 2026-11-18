@@ -1,13 +1,15 @@
+// Tests for PanelModel.js, what the bar widget and panel show.
+//
+// Seam: the model's functions (theme options, summary, switch target, time
+// editing, mode view, cursor rows), each a pure function of settings and the
+// schedule's output. The QML only binds them to components.
+
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
-import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
+import { load } from "./load.mjs"
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), "..")
-const load = (file, names) =>
-  new Function(`${readFileSync(join(REPO, file), "utf8")}\nreturn { ${names} };`)()
-const Panel = load("PanelModel.js", "plainText, themeOptions, needsThemes, summary, withTimePart, switchTarget, modeView")
+const Panel = load("PanelModel.js")
+const { plainText } = load("Util.js")
 
 const S = { lightTheme: "Flexoki Light", darkTheme: "Tokyo Night" }
 
@@ -24,9 +26,34 @@ test("switch now has no target when the other theme is unset or not installed", 
   assert.equal(Panel.switchTarget("light", S, ["Flexoki Light"]), null)
 })
 
-test("markup in a theme name is neutralised for display", () => {
-  assert.equal(Panel.plainText("<b>Flexoki</b> Light"), "Flexoki Light")
-  assert.equal(Panel.plainText(undefined), "")
+test("markup in a theme name is neutralised in the picker labels but kept in the value", () => {
+  const [option] = Panel.themeOptions(['<img src="https://example.invalid/t.png">Evil'], undefined)
+  assert.equal(option.label, "Evil")
+  assert.doesNotMatch(option.label, /[<>]/)
+  assert.equal(plainText(option.value), "Evil")
+})
+
+test("the cursor moves one row at a time and stops at the ends", () => {
+  assert.equal(Panel.moveRow(Panel.ROW.lightTheme, -1, true), Panel.ROW.lightTheme)
+  assert.equal(Panel.moveRow(Panel.ROW.lightTheme, 1, true), Panel.ROW.darkTheme)
+  assert.equal(Panel.moveRow(Panel.ROW.pause, 1, true), Panel.ROW.pause)
+})
+
+test("the cursor visits Refresh location only when it is shown", () => {
+  assert.equal(Panel.moveRow(Panel.ROW.darkEdge, 1, true), Panel.ROW.refreshLocation)
+  assert.equal(Panel.moveRow(Panel.ROW.darkEdge, 1, false), Panel.ROW.switchNow)
+  assert.equal(Panel.moveRow(Panel.ROW.switchNow, -1, false), Panel.ROW.darkEdge)
+  assert.equal(Panel.moveRow(Panel.ROW.switchNow, -1, true), Panel.ROW.refreshLocation)
+})
+
+test("each cursor row has its own number", () => {
+  const rows = Object.values(Panel.ROW)
+  assert.equal(new Set(rows).size, rows.length)
+})
+
+test("the hour and minute of a time are read back for the number fields", () => {
+  assert.equal(Panel.timePart("07:30", "hour"), 7)
+  assert.equal(Panel.timePart("07:30", "minute"), 30)
 })
 
 test("theme options list the installed themes with plain labels", () => {
