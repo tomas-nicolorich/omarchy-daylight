@@ -54,6 +54,15 @@ again until the next sunrise or sunset (or the next fixed time).
 - If a chosen theme is no longer installed, Daylight sends a notification and
   skips the switch.
 
+## Bar background
+
+Double-clicking the bar cycles its background between clear, glassy and
+opaque. Daylight remembers the background you leave on the bar in each period
+and restores it when that period's theme comes back, whichever way the theme
+changed (a switch time, **Switch now**, or the theme menu). It stores the two
+backgrounds in its state file. A theme that is neither the light nor the dark
+theme leaves the bar alone.
+
 ## Location
 
 Sun mode needs your location, and Daylight calculates sunrise and sunset on
