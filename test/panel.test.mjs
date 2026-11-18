@@ -30,7 +30,7 @@ test("markup in a theme name is neutralised in the picker labels but kept in the
   const [option] = Panel.themeOptions(['<img src="https://example.invalid/t.png">Evil'], undefined)
   assert.equal(option.label, "Evil")
   assert.doesNotMatch(option.label, /[<>]/)
-  assert.equal(plainText(option.value), "Evil")
+  assert.equal(option.value, "evil")
 })
 
 test("the cursor moves one row at a time and stops at the ends", () => {
@@ -58,20 +58,53 @@ test("the hour and minute of a time are read back for the number fields", () => 
 
 test("theme options list the installed themes with plain labels", () => {
   assert.deepEqual(Panel.themeOptions(["Nord", "<i>Tokyo</i> Night"], undefined), [
-    { value: "Nord", label: "Nord" },
-    { value: "<i>Tokyo</i> Night", label: "Tokyo Night" },
+    { value: "nord", label: "Nord" },
+    { value: "tokyo-night", label: "Tokyo Night" },
   ])
 })
 
 test("a saved theme that is no longer installed stays selectable", () => {
   assert.deepEqual(Panel.themeOptions(["Nord"], "Gone"), [
     { value: "Gone", label: "Gone" },
-    { value: "Nord", label: "Nord" },
+    { value: "nord", label: "Nord" },
   ])
 })
 
 test("a saved theme matching an installed one by slug is not duplicated", () => {
   assert.equal(Panel.themeOptions(["Flexoki Light"], "flexoki-light").length, 1)
+})
+
+test("a saved slug shows as the installed display name", () => {
+  assert.equal(Panel.displayName(["Catppuccin Latte", "Nord"], "catppuccin-latte"), "Catppuccin Latte")
+})
+
+test("a slug that is not installed shows as saved, without markup", () => {
+  assert.equal(Panel.displayName(["Nord"], "gone-theme"), "gone-theme")
+  assert.equal(Panel.displayName(null, "<b>x</b>"), "x")
+  assert.equal(Panel.displayName(["Nord"], undefined), "")
+})
+
+test("the picker saves slugs and shows display names", () => {
+  assert.deepEqual(Panel.themeOptions(["Catppuccin Latte"], "catppuccin-latte"),
+    [{ value: "catppuccin-latte", label: "Catppuccin Latte" }])
+})
+
+test("the summary's next theme is the display name when installed", () => {
+  const result = { period: "light", next: { at: 1, period: "dark" } }
+  const s = { lightTheme: "flexoki-light", darkTheme: "catppuccin-latte" }
+  assert.equal(Panel.summary(result, s, ["Catppuccin Latte"]).nextTheme, "Catppuccin Latte")
+})
+
+test("refresh location shows in sun mode with a geo-lookup location only", () => {
+  assert.equal(Panel.refreshVisible({ mode: "sun" }, true), true)
+  assert.equal(Panel.refreshVisible({ mode: "fixed" }, true), false)
+  assert.equal(Panel.refreshVisible({ mode: "sun" }, false), false)
+})
+
+test("the cursor skips Refresh location in fixed mode", () => {
+  const visible = Panel.refreshVisible({ mode: "fixed" }, true)
+  assert.equal(Panel.moveRow(Panel.ROW.darkEdge, 1, visible), Panel.ROW.switchNow)
+  assert.equal(Panel.moveRow(Panel.ROW.switchNow, -1, visible), Panel.ROW.darkEdge)
 })
 
 test("the panel asks for themes until both are chosen", () => {
