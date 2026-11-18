@@ -1,15 +1,20 @@
+// Tests for Schedule.js, Daylight's schedule model.
+//
+// Seam: `evaluate(input)`, a pure function of the settings, the location, the
+// clock, the scheduler's saved state, the current theme and the installed
+// themes. It returns the current period, the next switch, whether to apply a
+// theme and what to record. `resumedAfterGap` is the second, small seam: the
+// scheduler's wall-clock check for waking from sleep.
+//
+// Local times are Europe/Madrid, set before anything reads the clock.
 process.env.TZ = "Europe/Madrid"
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
-import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
+import { load } from "./load.mjs"
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), "..")
-const load = (file, names) =>
-  new Function(`${readFileSync(join(REPO, file), "utf8")}\nreturn { ${names} };`)()
-const { evaluate, themeSlug } = load("Schedule.js", "evaluate, themeSlug")
+const { evaluate, resumedAfterGap } = load("Schedule.js")
+const { slug: themeSlug } = load("Util.js")
 
 // Local (Europe/Madrid) wall-clock time as epoch ms.
 const at = (s) => new Date(s).getTime()
@@ -254,6 +259,92 @@ test("spring forward: the next switch is 07:00 on the local clock", () => {
 test("fall back: the next switch is 07:00 on the local clock", () => {
   const r = run({ now: at("2026-10-25T00:30") })
   assert.equal(r.next.at, Date.UTC(2026, 9, 25, 6, 0))
+})
+
+// ---- only the passing of time crosses a boundary ----
+const ANCHORED = { lastBoundary: at("2026-06-10T07:00"), nextAt: at("2026-06-10T19:00") }
+
+test("with nothing changed between boundaries, nothing is applied or recorded", () => {
+  const r = run({ state: ANCHORED, currentTheme: "nord" })
+  assert.equal(r.apply, null)
+  assert.equal(r.record, false)
+})
+
+test("a settings edit that moves the boundary later re-anchors without applying", () => {
+  // Light time 13:00 at 12:00: the current period flips to dark, yet no time passed.
+  const r = run({ state: ANCHORED, currentTheme: "flexoki-light",
+    settings: { ...SETTINGS, lightTime: "13:00" } })
+  assert.equal(r.period, "dark")
+  assert.equal(r.apply, null)
+  assert.equal(r.record, true)
+  assert.equal(r.boundary, at("2026-06-09T19:00"))
+  assert.equal(r.next.at, at("2026-06-10T13:00"))
+})
+
+test("a settings edit that moves the boundary earlier re-anchors without applying", () => {
+  // Light time 11:00 at 12:00: the new current boundary (11:00) is after the recorded one.
+  const r = run({ state: ANCHORED, currentTheme: "nord",
+    settings: { ...SETTINGS, lightTime: "11:00" } })
+  assert.equal(r.apply, null)
+  assert.equal(r.record, true)
+  assert.equal(r.boundary, at("2026-06-10T11:00"))
+})
+
+test("after a re-anchor, the next passing boundary applies its theme", () => {
+  const edited = { ...SETTINGS, lightTime: "13:00" }
+  const first = run({ state: ANCHORED, settings: edited })
+  const state = { lastBoundary: first.boundary, nextAt: first.next.at }
+  const later = run({ state, settings: edited, currentTheme: "tokyo-night", now: at("2026-06-10T13:01") })
+  assert.equal(later.apply, "flexoki-light")
+})
+
+test("a location edit that moves a sun boundary re-anchors without applying", () => {
+  const first = sunDay(LONDON, at("2026-06-21T12:00"), { state: null })
+  const state = { lastBoundary: first.boundary, nextAt: first.next.at }
+  const moved = sunDay(NEWYORK, at("2026-06-21T12:00"), { state, currentTheme: "nord" })
+  assert.equal(moved.apply, null)
+  assert.equal(moved.missing, null)
+})
+
+test("an old state without a next time falls back to comparing boundaries", () => {
+  const r = run({ state: { lastBoundary: at("2026-06-09T19:00") }, currentTheme: "tokyo-night" })
+  assert.equal(r.apply, "flexoki-light")
+})
+
+// ---- an unknown installed list is "can't verify" ----
+test("an empty or missing installed list skips the apply without a notification or a record", () => {
+  for (const installedThemes of [[], null, undefined]) {
+    const r = run({ installedThemes, currentTheme: "nord" })
+    assert.equal(r.apply, null)
+    assert.equal(r.missing, null)
+    assert.equal(r.record, false)
+  }
+})
+
+test("an unknown installed list retries on the next evaluation and then applies", () => {
+  const first = run({ installedThemes: [], currentTheme: "nord" })
+  assert.equal(first.record, false)
+  const again = run({ installedThemes: THEMES, currentTheme: "nord" })
+  assert.equal(again.apply, "flexoki-light")
+  assert.equal(again.record, true)
+})
+
+test("an unknown installed list still records when the theme is already right", () => {
+  const r = run({ installedThemes: null, currentTheme: "flexoki-light" })
+  assert.equal(r.apply, null)
+  assert.equal(r.record, true)
+})
+
+// ---- resume from sleep ----
+test("a wall-clock gap well beyond the heartbeat means the machine slept", () => {
+  assert.equal(resumedAfterGap(1000, 1000 + 30000, 30000), false)
+  assert.equal(resumedAfterGap(1000, 1000 + 65000, 30000), true)
+  assert.equal(resumedAfterGap(1000, 1000 + 3600000, 30000), true)
+})
+
+test("the clock jumping backwards counts as a resume, and the first beat does not", () => {
+  assert.equal(resumedAfterGap(50000, 1000, 30000), true)
+  assert.equal(resumedAfterGap(null, 1000, 30000), false)
 })
 
 test("a dark time inside the skipped hour still fires once that day", () => {
