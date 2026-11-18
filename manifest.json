@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "tomas.daylight",
+  "name": "Daylight",
+  "version": "0.1.0",
+  "author": "Tomas Nicolorich",
+  "license": "MIT",
+  "description": "Switches Omarchy between a light and a dark theme at sunrise and sunset, or at fixed times.",
+  "kinds": ["service"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml"
+  }
+}
