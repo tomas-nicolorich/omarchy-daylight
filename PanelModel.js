@@ -40,6 +40,18 @@ function summary(result, settings) {
   }
 }
 
+// Theme slug "Switch now" applies: the other period's theme, or null when it
+// is unset or not installed.
+function switchTarget(period, settings, installed) {
+  var other = period === "light" ? settings.darkTheme : settings.lightTheme
+  if (!other) return null
+  var list = Array.isArray(installed) ? installed : []
+  for (var i = 0; i < list.length; i++) {
+    if (slug(list[i]) === slug(other)) return slug(other)
+  }
+  return null
+}
+
 // Replace the hour or minute of an "HH:MM" time.
 function withTimePart(time, part, value) {
   var p = String(time).split(":")

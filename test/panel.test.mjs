@@ -7,7 +7,22 @@ import { fileURLToPath } from "node:url"
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..")
 const load = (file, names) =>
   new Function(`${readFileSync(join(REPO, file), "utf8")}\nreturn { ${names} };`)()
-const Panel = load("PanelModel.js", "plainText, themeOptions, needsThemes, summary, withTimePart")
+const Panel = load("PanelModel.js", "plainText, themeOptions, needsThemes, summary, withTimePart, switchTarget")
+
+const S = { lightTheme: "Flexoki Light", darkTheme: "Tokyo Night" }
+
+test("switch now in the light period targets the dark theme", () => {
+  assert.equal(Panel.switchTarget("light", S, ["Flexoki Light", "Tokyo Night"]), "tokyo-night")
+})
+
+test("switch now in the dark period targets the light theme", () => {
+  assert.equal(Panel.switchTarget("dark", S, ["Flexoki Light", "Tokyo Night"]), "flexoki-light")
+})
+
+test("switch now has no target when the other theme is unset or not installed", () => {
+  assert.equal(Panel.switchTarget("light", { lightTheme: "A" }, ["A"]), null)
+  assert.equal(Panel.switchTarget("light", S, ["Flexoki Light"]), null)
+})
 
 test("markup in a theme name is neutralised for display", () => {
   assert.equal(Panel.plainText("<b>Flexoki</b> Light"), "Flexoki Light")

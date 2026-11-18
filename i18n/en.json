@@ -12,5 +12,8 @@
   "panel.darkTime": "Dark from",
   "panel.hour": "Hour",
   "panel.minute": "Minute",
+  "panel.switchNow": "Switch now",
+  "panel.pause": "Pause switching",
+  "panel.pause.description": "Keep the current theme until you resume.",
   "notification.missingTheme": "Theme \"%1\" is not installed, so Daylight skipped the switch."
 }

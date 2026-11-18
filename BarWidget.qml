@@ -68,6 +68,17 @@ BarWidget {
         Config.settingsToSave(root.shellJson, root.pluginId, patch))
   }
 
+  // Switch now: apply the other period's theme. The scheduler only acts at a
+  // boundary, so this counts as a manual change and lasts until the next one.
+  readonly property string switchTheme: Model.switchTarget(root.info.period, root.current, root.installedThemes)
+
+  function switchNow() {
+    if (!root.switchTheme) return
+    Quickshell.execDetached(["bash", "-lc", 'exec "$@"', "bash", "omarchy", "theme", "set", root.switchTheme])
+  }
+
+  function setPaused(paused) { root.save({ paused: paused }) }
+
   readonly property string tooltip: {
     if (Model.needsThemes(root.current)) return strings.t("widget.tooltip.chooseThemes", "Open Daylight to choose your light and dark themes")
     var theme = Model.plainText(root.info.nextTheme)
@@ -136,7 +147,8 @@ BarWidget {
       anchors.fill: parent
       implicitHeight: column.implicitHeight
 
-      // Cursor rows: 0 light theme, 1 dark theme, 2 light time, 3 dark time.
+      // Cursor rows: 0 light theme, 1 dark theme, 2 light time, 3 dark time,
+      // 4 switch now, 5 pause.
       // Time rows have two parts: 0 hour, 1 minute.
       property int row: 0
       property int part: 0
@@ -154,13 +166,15 @@ BarWidget {
       }
       onActivateRequested: {
         if (!keys.cursorOn) return
+        if (keys.row === 4) { root.switchNow(); return }
+        if (keys.row === 5) { root.setPaused(!root.current.paused); return }
         if (keys.row === 0) lightDrop.open()
         else if (keys.row === 1) darkDrop.open()
         else timeField(keys.row, keys.part).field.forceActiveFocus()
       }
 
       function moveRow(dy) {
-        keys.row = Math.max(0, Math.min(3, keys.row + (dy > 0 ? 1 : -1)))
+        keys.row = Math.max(0, Math.min(5, keys.row + (dy > 0 ? 1 : -1)))
       }
       function timeField(r, p) {
         return r === 2 ? (p === 0 ? lightHour : lightMinute) : (p === 0 ? darkHour : darkMinute)
@@ -263,6 +277,26 @@ BarWidget {
             hasCursor: keys.cursorOn && keys.row === 3 && keys.part === 1
             onModified: function(v) { root.save({ darkTime: Model.withTimePart(root.current.darkTime, "minute", v) }) }
           }
+        }
+
+        // Switch now and Pause.
+        Button {
+          id: switchButton
+          width: parent.width
+          text: strings.t("panel.switchNow", "Switch now")
+          enabled: !!root.switchTheme
+          hasCursor: keys.cursorOn && keys.row === 4
+          onClicked: root.switchNow()
+        }
+
+        Toggle {
+          id: pauseToggle
+          width: parent.width
+          label: strings.t("panel.pause", "Pause switching")
+          description: strings.t("panel.pause.description", "Keep the current theme until you resume.")
+          checked: !!root.current.paused
+          hasCursor: keys.cursorOn && keys.row === 5
+          onClicked: root.setPaused(!root.current.paused)
         }
       }
     }
