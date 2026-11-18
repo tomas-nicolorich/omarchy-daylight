@@ -25,7 +25,24 @@ function moveRow(row, dy, refreshVisible) {
   return Math.max(ROW.lightTheme, Math.min(ROW.pause, next))
 }
 
-// Dropdown options for a theme picker. A saved theme that is not installed
+// The display name ("Catppuccin Latte") of a saved theme slug, from the
+// installed names. A theme that is not installed shows as saved.
+function displayName(installed, saved) {
+  var list = Array.isArray(installed) ? installed : []
+  for (var i = 0; i < list.length; i++) {
+    if (saved && Util.slug(list[i]) === Util.slug(saved)) return Util.plainText(list[i])
+  }
+  return Util.plainText(saved)
+}
+
+// Whether the panel shows Refresh location: only in sun mode, and only when
+// the location comes from the geo lookup.
+function refreshVisible(settings, canRefresh) {
+  return !!canRefresh && !!settings && settings.mode === "sun"
+}
+
+// Dropdown options for a theme picker. Values are slugs (what is saved and
+// compared), labels the display names. A saved theme that is not installed
 // stays in the list (first) so the picker shows what is saved.
 function themeOptions(installed, saved) {
   var out = []
@@ -33,7 +50,7 @@ function themeOptions(installed, saved) {
   var found = false
   for (var i = 0; i < list.length; i++) {
     if (saved && Util.slug(list[i]) === Util.slug(saved)) found = true
-    out.push({ value: list[i], label: Util.plainText(list[i]) })
+    out.push({ value: Util.slug(list[i]), label: Util.plainText(list[i]) })
   }
   if (saved && !found) out.unshift({ value: saved, label: Util.plainText(saved) })
   return out
@@ -45,13 +62,15 @@ function needsThemes(settings) {
 }
 
 // `result` is Schedule.evaluate's output.
-function summary(result, settings) {
+// `installed` (optional) turns the next theme's slug into its display name.
+function summary(result, settings, installed) {
   var next = result.next.period
+  var saved = (next === "light" ? settings.lightTheme : settings.darkTheme) || ""
   return {
     period: result.period,
     nextAt: result.next.at,
     nextPeriod: next,
-    nextTheme: (next === "light" ? settings.lightTheme : settings.darkTheme) || ""
+    nextTheme: displayName(installed, saved)
   }
 }
 

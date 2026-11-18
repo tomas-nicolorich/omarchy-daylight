@@ -47,6 +47,8 @@ BarWidget {
   readonly property var location: Location.resolveLocation(root.weather, root.savedState, null).location
   // Only a location from the geo lookup can be refreshed.
   readonly property bool canRefreshLocation: Location.isAuto(root.weather)
+  // Refresh location shows in sun mode only.
+  readonly property bool showRefresh: Model.refreshVisible(root.activeSettings, root.canRefreshLocation)
 
   // What the schedule says right now; the saved scheduler state is not needed
   // to show the period and the next switch.
@@ -58,7 +60,7 @@ BarWidget {
     currentTheme: "",
     installedThemes: root.installedThemes
   })
-  readonly property var summary: Model.summary(root.evaluation, root.activeSettings)
+  readonly property var summary: Model.summary(root.evaluation, root.activeSettings, root.installedThemes)
   readonly property bool isLight: root.summary.period === "light"
   readonly property string nextTime: root.clock(root.summary.nextAt)
   readonly property var modeInfo: Model.modeView(root.evaluation, root.activeSettings)
@@ -191,7 +193,7 @@ BarWidget {
     open: root.opened
     focusTarget: panel.loadedContent
     contentWidth: panel.fittedContentWidth(Style.space(360))
-    contentHeight: panel.fittedContentHeight(panel.loadedContentHeight, Style.space(520))
+    contentHeight: panel.fittedContentHeight(panel.loadedContentHeight)
 
     content: PanelKeyCatcher {
       id: keys
@@ -219,7 +221,7 @@ BarWidget {
       onActivateRequested: {
         if (!keys.cursorOn) return
         if (keys.row === Model.ROW.switchNow) root.switchNow()
-        else if (keys.row === Model.ROW.refreshLocation) root.refreshLocation()
+        else if (keys.row === Model.ROW.refreshLocation && root.showRefresh) root.refreshLocation()
         else if (keys.row === Model.ROW.pause) root.setPaused(!root.activeSettings.paused)
         else if (keys.row === Model.ROW.lightTheme) lightDrop.open()
         else if (keys.row === Model.ROW.darkTheme) darkDrop.open()
@@ -229,7 +231,7 @@ BarWidget {
       }
 
       function moveRow(dy) {
-        keys.row = Model.moveRow(keys.row, dy, root.canRefreshLocation)
+        keys.row = Model.moveRow(keys.row, dy, root.showRefresh)
       }
 
       Column {
@@ -353,7 +355,7 @@ BarWidget {
         // Refresh location (geo lookup only), Switch now and Pause.
         Button {
           id: refreshButton
-          visible: root.canRefreshLocation
+          visible: root.showRefresh
           width: parent.width
           text: strings.t("panel.refreshLocation", "Refresh location")
           hasCursor: keys.cursorOn && keys.row === Model.ROW.refreshLocation
