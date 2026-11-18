@@ -1,6 +1,6 @@
 {
   "widget.tooltip.next": "Switching to %1 at %2",
-  "widget.tooltip.paused": "Paused. Next switch at %1",
+  "widget.tooltip.paused": "Switching is paused",
   "widget.tooltip.chooseThemes": "Open Daylight to choose your light and dark themes",
   "panel.period.light": "Light period",
   "panel.period.dark": "Dark period",
@@ -20,6 +20,7 @@
   "panel.sunsetOffset": "Sunset offset (min)",
   "panel.hour": "Hour",
   "panel.minute": "Minute",
+  "panel.refreshLocation": "Refresh location",
   "panel.switchNow": "Switch now",
   "panel.pause": "Pause switching",
   "panel.pause.description": "Keep the current theme until you resume.",
