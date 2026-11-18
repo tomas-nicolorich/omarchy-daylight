@@ -44,8 +44,97 @@ test("before the light time the dark period is still running", () => {
   assert.equal(r.next.at, at("2026-06-10T07:00"))
 })
 
-test("sun mode behaves as fixed times until sun calculation exists", () => {
-  assert.equal(run({ settings: { ...SETTINGS, mode: "sun" } }).period, "light")
+// ---- sun mode ----
+const SUN = { ...SETTINGS, mode: "sun" }
+const utc = (s) => Date.parse(s + "Z")
+const LONDON = { latitude: 51.5074, longitude: -0.1278 }
+const NEWYORK = { latitude: 40.7128, longitude: -74.006 }
+const SYDNEY = { latitude: -33.8688, longitude: 151.2093 }
+const TROMSO = { latitude: 69.6492, longitude: 18.9553 }
+const MADRID = { latitude: 40.4168, longitude: -3.7038 }
+const near = (actual, expected, minutes = 2) =>
+  assert.ok(Math.abs(actual - expected) <= minutes * 60000,
+    `${new Date(actual).toISOString()} vs ${new Date(expected).toISOString()}`)
+
+const sunDay = (location, now, over = {}) =>
+  run({ settings: SUN, location, now, ...over })
+
+test("London on the June solstice: sunrise 04:43 and sunset 21:21 BST", () => {
+  const r = sunDay(LONDON, at("2026-06-21T12:00"))
+  near(r.sun.sunrise, utc("2026-06-21T03:43"))
+  near(r.sun.sunset, utc("2026-06-21T20:21"))
+})
+
+test("New York on the June solstice: 05:25 and 20:31 EDT", () => {
+  const r = sunDay(NEWYORK, at("2026-06-21T18:00"))
+  near(r.sun.sunrise, utc("2026-06-21T09:25"))
+  near(r.sun.sunset, utc("2026-06-22T00:31"))
+})
+
+test("Sydney on the December solstice: 05:41 and 20:05 AEDT", () => {
+  const r = sunDay(SYDNEY, at("2026-12-21T00:00"))
+  near(r.sun.sunrise, utc("2026-12-20T18:41"))
+  near(r.sun.sunset, utc("2026-12-21T09:05"))
+})
+
+test("sun mode switches at sunrise and sunset", () => {
+  const r = sunDay(LONDON, at("2026-06-21T12:00"))
+  assert.equal(r.period, "light")
+  assert.equal(r.fallback, null)
+  assert.equal(r.next.period, "dark")
+  assert.equal(r.next.at, r.sun.sunset)
+  const night = sunDay(LONDON, at("2026-06-21T23:30"))
+  assert.equal(night.period, "dark")
+  assert.equal(night.next.period, "light")
+  near(night.next.at, utc("2026-06-22T03:43"))
+})
+
+test("offsets shift sunrise later and sunset earlier", () => {
+  const base = sunDay(LONDON, at("2026-06-21T12:00"))
+  const r = sunDay(LONDON, at("2026-06-21T12:00"),
+    { settings: { ...SUN, sunriseOffsetMinutes: 30, sunsetOffsetMinutes: -45 } })
+  assert.equal(r.next.at, base.sun.sunset - 45 * 60000)
+  const early = sunDay(LONDON, utc("2026-06-21T03:30") + 0)
+  assert.equal(early.period, "dark")
+  const shifted = sunDay(LONDON, utc("2026-06-21T03:30"),
+    { settings: { ...SUN, sunriseOffsetMinutes: -30 } })
+  assert.equal(shifted.period, "light")
+  const later = sunDay(LONDON, utc("2026-06-21T04:00"),
+    { settings: { ...SUN, sunriseOffsetMinutes: 30 } })
+  assert.equal(later.period, "dark")
+})
+
+test("midnight sun keeps the light period all day", () => {
+  const r = sunDay(TROMSO, at("2026-06-21T03:00"))
+  assert.equal(r.period, "light")
+  assert.equal(r.sun.state, "polarDay")
+  assert.equal(r.sun.sunrise, null)
+})
+
+test("polar night keeps the dark period all day", () => {
+  const r = sunDay(TROMSO, at("2026-12-21T12:00"))
+  assert.equal(r.period, "dark")
+  assert.equal(r.sun.state, "polarNight")
+})
+
+test("sun mode follows the wall clock across the spring DST change", () => {
+  const before = sunDay(MADRID, at("2026-03-28T12:00"))
+  const after = sunDay(MADRID, at("2026-03-29T12:00"))
+  assert.equal(new Date(before.sun.sunrise).getHours(), 7)
+  assert.equal(new Date(after.sun.sunrise).getHours(), 8)
+})
+
+test("sun mode with no location falls back to the fixed times and says so", () => {
+  const r = sunDay(null, at("2026-06-10T12:00"))
+  assert.equal(r.fallback, "noLocation")
+  assert.equal(r.sun, null)
+  assert.deepEqual(r.next, { at: at("2026-06-10T19:00"), period: "dark" })
+})
+
+test("fixed mode never reports a fallback or sun times", () => {
+  const r = run({ location: LONDON })
+  assert.equal(r.fallback, null)
+  assert.equal(r.sun, null)
 })
 
 test("first start with both themes chosen applies the current period's theme", () => {
