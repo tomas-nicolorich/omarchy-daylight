@@ -61,3 +61,23 @@ function withTimePart(time, part, value) {
   else m = value
   return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m
 }
+
+// ---- Mode section: sun or fixed times ----
+
+// What the mode section shows. `result` is Schedule.evaluate's output. In sun
+// mode with no location the fixed times are in use, so the panel shows them
+// together with a notice.
+function modeView(result, settings) {
+  var sun = result.sun
+  var noLocation = result.fallback === "noLocation"
+  var sunMode = settings.mode === "sun" && !noLocation
+  return {
+    mode: settings.mode,
+    showOffsets: sunMode,
+    showTimes: !sunMode,
+    noLocation: noLocation,
+    sunState: sun ? sun.state : null,
+    sunrise: sun ? sun.sunrise : null,
+    sunset: sun ? sun.sunset : null
+  }
+}

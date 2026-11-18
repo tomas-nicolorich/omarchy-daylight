@@ -12,6 +12,7 @@ import qs.Ui
 import "Config.js" as Config
 import "Schedule.js" as Schedule
 import "PanelModel.js" as Model
+import "Location.js" as Location
 
 BarWidget {
   id: root
@@ -34,9 +35,16 @@ BarWidget {
     for (var k in root.overrides) base[k] = root.overrides[k]
     return base
   }
+  // Location, resolved as the scheduler does: Omarchy's weather file first,
+  // then the location Daylight cached from geo.omarchy.org.
+  property var weather: ({ name: "", latitude: null, longitude: null })
+  property var cachedLocation: null
+  readonly property var location: Location.resolveLocation(root.weather, root.cachedLocation).location
+  readonly property string stateHome: Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state")
+
   readonly property var result: Schedule.evaluate({
     settings: root.current,
-    location: null,
+    location: root.location,
     now: root.now,
     state: null,
     currentTheme: "",
@@ -45,6 +53,11 @@ BarWidget {
   readonly property var info: Model.summary(root.result, root.current)
   readonly property bool isLight: root.info.period === "light"
   readonly property string nextTime: new Date(root.info.nextAt).toLocaleTimeString(root.locale, Locale.ShortFormat)
+  readonly property var modeInfo: Model.modeView(root.result, root.current)
+
+  function clock(ms) {
+    return ms === null ? "" : new Date(ms).toLocaleTimeString(root.locale, Locale.ShortFormat)
+  }
 
   Commons.Translations {
     id: strings
@@ -101,6 +114,26 @@ BarWidget {
     onLoadFailed: root.shellJson = null
   }
 
+  FileView {
+    path: root.stateHome + "/omarchy/settings/weather.json"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.weather = Location.parseWeatherFile(text())
+    onLoadFailed: root.weather = Location.parseWeatherFile("")
+  }
+
+  FileView {
+    path: root.stateHome + "/omarchy/daylight-state.json"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      try { root.cachedLocation = JSON.parse(text()).location || null } catch (e) { root.cachedLocation = null }
+    }
+    onLoadFailed: root.cachedLocation = null
+  }
+
   Process {
     id: themeList
     command: ["omarchy", "theme", "list"]
@@ -147,37 +180,41 @@ BarWidget {
       anchors.fill: parent
       implicitHeight: column.implicitHeight
 
-      // Cursor rows: 0 light theme, 1 dark theme, 2 light time, 3 dark time,
-      // 4 switch now, 5 pause.
-      // Time rows have two parts: 0 hour, 1 minute.
+      // Cursor rows: 0 light theme, 1 dark theme, 2 mode toggle, 3 light time
+      // or sunrise offset, 4 dark time or sunset offset, 5 switch now,
+      // 6 pause. Time rows have two parts: 0 hour, 1 minute.
       property int row: 0
       property int part: 0
       property bool cursorOn: false
       blocked: lightDrop.popupOpen || darkDrop.popupOpen
         || lightHour.field.activeFocus || lightMinute.field.activeFocus
         || darkHour.field.activeFocus || darkMinute.field.activeFocus
+        || sunriseOffset.field.activeFocus || sunsetOffset.field.activeFocus
 
       onCloseRequested: root.close()
       onTabRequested: function(direction) { keys.moveRow(direction) }
       onMoveRequested: function(dx, dy) {
         if (!keys.cursorOn) { keys.cursorOn = true; return }
         if (dy !== 0) keys.moveRow(dy)
-        else if (keys.row >= 2) keys.part = dx > 0 ? 1 : 0
+        else if (keys.row === 2) root.save({ mode: dx > 0 ? "fixed" : "sun" })
+        else if (keys.row >= 3 && root.modeInfo.showTimes) keys.part = dx > 0 ? 1 : 0
       }
       onActivateRequested: {
         if (!keys.cursorOn) return
-        if (keys.row === 4) { root.switchNow(); return }
-        if (keys.row === 5) { root.setPaused(!root.current.paused); return }
+        if (keys.row === 5) { root.switchNow(); return }
+        if (keys.row === 6) { root.setPaused(!root.current.paused); return }
         if (keys.row === 0) lightDrop.open()
         else if (keys.row === 1) darkDrop.open()
+        else if (keys.row === 2) root.save({ mode: root.current.mode === "sun" ? "fixed" : "sun" })
+        else if (root.modeInfo.showOffsets) (keys.row === 3 ? sunriseOffset : sunsetOffset).field.forceActiveFocus()
         else timeField(keys.row, keys.part).field.forceActiveFocus()
       }
 
       function moveRow(dy) {
-        keys.row = Math.max(0, Math.min(5, keys.row + (dy > 0 ? 1 : -1)))
+        keys.row = Math.max(0, Math.min(6, keys.row + (dy > 0 ? 1 : -1)))
       }
       function timeField(r, p) {
-        return r === 2 ? (p === 0 ? lightHour : lightMinute) : (p === 0 ? darkHour : darkMinute)
+        return r === 3 ? (p === 0 ? lightHour : lightMinute) : (p === 0 ? darkHour : darkMinute)
       }
 
       Column {
@@ -225,7 +262,65 @@ BarWidget {
           onChanged: function(v) { root.save({ darkTheme: v }) }
         }
 
+        // ---- Mode section: sun or fixed times ----
+        ButtonGroup {
+          id: modeToggle
+          options: [
+            { value: "sun", label: strings.t("panel.mode.sun", "Sun") },
+            { value: "fixed", label: strings.t("panel.mode.fixed", "Fixed times") }
+          ]
+          value: root.current.mode
+          cursorIndex: keys.cursorOn && keys.row === 2 ? (root.current.mode === "sun" ? 0 : 1) : -1
+          onChanged: function(v) { root.save({ mode: v }) }
+        }
+
         Text {
+          visible: root.modeInfo.noLocation
+          textFormat: Text.PlainText
+          width: parent.width
+          wrapMode: Text.WordWrap
+          color: Commons.Color.accent
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          text: strings.t("panel.noLocation", "No location found, so Daylight is using the fixed times.")
+        }
+
+        Text {
+          visible: root.modeInfo.showOffsets
+          textFormat: Text.PlainText
+          width: parent.width
+          wrapMode: Text.WordWrap
+          color: Qt.darker(Commons.Color.foreground, 1.4)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.body
+          text: root.modeInfo.sunState === "polarDay" ? strings.t("panel.sun.polarDay", "The sun does not set today.")
+            : root.modeInfo.sunState === "polarNight" ? strings.t("panel.sun.polarNight", "The sun does not rise today.")
+            : strings.t("panel.sun.today", "Sunrise %1, sunset %2").arg(root.clock(root.modeInfo.sunrise)).arg(root.clock(root.modeInfo.sunset))
+        }
+
+        Row {
+          visible: root.modeInfo.showOffsets
+          spacing: Style.space(12)
+          NumberField {
+            id: sunriseOffset
+            label: strings.t("panel.sunriseOffset", "Sunrise offset (min)")
+            from: -180; to: 180
+            value: root.current.sunriseOffsetMinutes
+            hasCursor: keys.cursorOn && keys.row === 3
+            onModified: function(v) { root.save({ sunriseOffsetMinutes: v }) }
+          }
+          NumberField {
+            id: sunsetOffset
+            label: strings.t("panel.sunsetOffset", "Sunset offset (min)")
+            from: -180; to: 180
+            value: root.current.sunsetOffsetMinutes
+            hasCursor: keys.cursorOn && keys.row === 4
+            onModified: function(v) { root.save({ sunsetOffsetMinutes: v }) }
+          }
+        }
+
+        Text {
+          visible: root.modeInfo.showTimes
           textFormat: Text.PlainText
           text: strings.t("panel.lightTime", "Light from")
           color: Commons.Color.foreground
@@ -233,13 +328,14 @@ BarWidget {
           font.pixelSize: Style.font.body
         }
         Row {
+          visible: root.modeInfo.showTimes
           spacing: Style.space(12)
           NumberField {
             id: lightHour
             label: strings.t("panel.hour", "Hour")
             from: 0; to: 23
             value: parseInt(root.current.lightTime.split(":")[0], 10)
-            hasCursor: keys.cursorOn && keys.row === 2 && keys.part === 0
+            hasCursor: keys.cursorOn && keys.row === 3 && keys.part === 0
             onModified: function(v) { root.save({ lightTime: Model.withTimePart(root.current.lightTime, "hour", v) }) }
           }
           NumberField {
@@ -247,12 +343,13 @@ BarWidget {
             label: strings.t("panel.minute", "Minute")
             from: 0; to: 59
             value: parseInt(root.current.lightTime.split(":")[1], 10)
-            hasCursor: keys.cursorOn && keys.row === 2 && keys.part === 1
+            hasCursor: keys.cursorOn && keys.row === 3 && keys.part === 1
             onModified: function(v) { root.save({ lightTime: Model.withTimePart(root.current.lightTime, "minute", v) }) }
           }
         }
 
         Text {
+          visible: root.modeInfo.showTimes
           textFormat: Text.PlainText
           text: strings.t("panel.darkTime", "Dark from")
           color: Commons.Color.foreground
@@ -260,13 +357,14 @@ BarWidget {
           font.pixelSize: Style.font.body
         }
         Row {
+          visible: root.modeInfo.showTimes
           spacing: Style.space(12)
           NumberField {
             id: darkHour
             label: strings.t("panel.hour", "Hour")
             from: 0; to: 23
             value: parseInt(root.current.darkTime.split(":")[0], 10)
-            hasCursor: keys.cursorOn && keys.row === 3 && keys.part === 0
+            hasCursor: keys.cursorOn && keys.row === 4 && keys.part === 0
             onModified: function(v) { root.save({ darkTime: Model.withTimePart(root.current.darkTime, "hour", v) }) }
           }
           NumberField {
@@ -274,7 +372,7 @@ BarWidget {
             label: strings.t("panel.minute", "Minute")
             from: 0; to: 59
             value: parseInt(root.current.darkTime.split(":")[1], 10)
-            hasCursor: keys.cursorOn && keys.row === 3 && keys.part === 1
+            hasCursor: keys.cursorOn && keys.row === 4 && keys.part === 1
             onModified: function(v) { root.save({ darkTime: Model.withTimePart(root.current.darkTime, "minute", v) }) }
           }
         }
@@ -285,7 +383,7 @@ BarWidget {
           width: parent.width
           text: strings.t("panel.switchNow", "Switch now")
           enabled: !!root.switchTheme
-          hasCursor: keys.cursorOn && keys.row === 4
+          hasCursor: keys.cursorOn && keys.row === 5
           onClicked: root.switchNow()
         }
 
@@ -295,7 +393,7 @@ BarWidget {
           label: strings.t("panel.pause", "Pause switching")
           description: strings.t("panel.pause.description", "Keep the current theme until you resume.")
           checked: !!root.current.paused
-          hasCursor: keys.cursorOn && keys.row === 5
+          hasCursor: keys.cursorOn && keys.row === 6
           onClicked: root.setPaused(!root.current.paused)
         }
       }
