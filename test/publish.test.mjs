@@ -1,3 +1,9 @@
+// Tests for what publishing needs: the manifest, LICENSE, README and the
+// plugin's one written file.
+//
+// Seam: the repository files on disk, as the marketplace and `omarchy plugin
+// validate` read them. No module under test.
+
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { existsSync, readFileSync } from "node:fs"
@@ -47,11 +53,31 @@ test("README documents install, removal, location lookup, images and every setti
   for (const key of settingKeys()) assert.ok(readme.includes(`\`${key}\``), `README lacks setting ${key}`)
 })
 
+test("detached commands go through Commons.Util.execArgv, not a hand-built bash wrapper", () => {
+  for (const file of ["Service.qml", "BarWidget.qml"]) {
+    assert.doesNotMatch(read(file), /\["bash",\s*"-lc"/, `${file} wraps bash -lc by hand`)
+  }
+  assert.match(read("Service.qml"), /Commons\.Util\.execArgv/)
+  assert.match(read("BarWidget.qml"), /Commons\.Util\.execArgv/)
+})
+
+test("the geo request limits the response size", () => {
+  assert.match(read("Service.qml"), /"curl"[^\n]*"--max-filesize"/)
+})
+
+test("the plugin id and file paths come from Paths.js only", () => {
+  for (const file of ["Service.qml", "BarWidget.qml"]) {
+    const source = read(file)
+    assert.doesNotMatch(source, /"tomas\.daylight"|shell\.json"|weather\.json"|daylight-state\.json"/, file)
+  }
+})
+
 test("the only file the plugin writes is its state file", () => {
-  const source = ["Service.qml", "BarWidget.qml"].map(read).join("\n")
+  const source = ["Service.qml", "BarWidget.qml", "Paths.js"].map(read).join("\n")
   const writes = source.split("\n").filter((l) => /\b(mv|tee|touch|rm|cp|mkdir)\b|>\s*"\$/.test(l))
   assert.ok(writes.length > 0)
   for (const line of writes) assert.match(line, /\$1(\.tmp)?"/, `unexpected write: ${line.trim()}`)
   assert.match(source, /stateFile: stateHome \+ "\/omarchy\/daylight-state\.json"/)
+  assert.match(read("Paths.js"), /WRITE_FILE_SCRIPT/)
   assert.doesNotMatch(source, /setText\(/)
 })

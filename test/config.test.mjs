@@ -1,13 +1,14 @@
+// Tests for Config.js, which reads and writes Daylight's settings in shell.json.
+//
+// Seam: `pluginSettings(shellJson, id)` (defaults applied, invalid values
+// dropped) and `settingsToSave(shellJson, id, patch)` (what the shell's
+// updateEntryInline gets), driven with shell.json shapes only.
+
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
-import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
+import { load } from "./load.mjs"
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), "..")
-const load = (file, names) =>
-  new Function(`${readFileSync(join(REPO, file), "utf8")}\nreturn { ${names} };`)()
-const Config = load("Config.js", "pluginSettings, settingsToSave")
+const Config = load("Config.js")
 const ID = "tomas.daylight"
 
 const DEFAULTS = {

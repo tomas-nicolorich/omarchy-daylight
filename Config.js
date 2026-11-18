@@ -7,6 +7,8 @@
 // layout entry wins. A save sends the keys of that one entry plus the change,
 // never the merged config (see settingsToSave).
 
+.import "Util.js" as Util
+
 var MAX_OFFSET_MINUTES = 180
 
 var DEFAULTS = {
@@ -59,13 +61,8 @@ function cleanOffset(v) {
 }
 
 function cleanTime(v) {
-  if (typeof v !== "string") return undefined
-  var m = /^(\d{1,2}):(\d{2})$/.exec(v.trim())
-  if (!m) return undefined
-  var h = parseInt(m[1], 10)
-  var mi = parseInt(m[2], 10)
-  if (h > 23 || mi > 59) return undefined
-  return (h < 10 ? "0" : "") + h + ":" + m[2]
+  var t = Util.parseTime(v)
+  return t ? Util.formatTime(t.hour, t.minute) : undefined
 }
 
 function cleanBool(v) {

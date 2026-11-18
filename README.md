@@ -44,8 +44,13 @@ again until the next sunrise or sunset (or the next fixed time).
 - Daylight applies a theme only when a switch time passes. Between switch times
   it never changes the theme, so a theme you pick by hand stays until the next
   one.
+- Editing a setting or the location never switches the theme. Only the passing
+  of time crosses a switch time.
 - After sleep or a long shell restart, Daylight applies the current period's
-  theme once.
+  theme once. It notices a resume within about a minute and re-checks at least
+  every 5 minutes.
+- If Daylight cannot read the list of installed themes, it skips the switch
+  quietly and tries again at the next check.
 - If a chosen theme is no longer installed, Daylight sends a notification and
   skips the switch.
 
@@ -58,13 +63,23 @@ your machine.
    `~/.local/state/omarchy/settings/weather.json`), Daylight uses it.
 2. Otherwise Daylight makes one request to `https://geo.omarchy.org/`, the same
    endpoint Omarchy's weather widget uses to detect your location. It saves the
-   answer in its state file and does not ask again while that saved answer
-   exists.
+   answer in its state file together with the time zone you were in.
 3. If neither gives a location, sun mode falls back to the fixed times, and the
    panel says so.
 
-That one request is the only network call Daylight makes. Set a weather
+Daylight asks `geo.omarchy.org` again in only two cases: when your time zone
+changes (Daylight keeps using the saved location until the new answer arrives),
+and when you press **Refresh location** in the panel. That button appears only
+when the location comes from this lookup; with coordinates in `weather.json`
+there is nothing to refresh. A failed request is not retried for a day, unless
+the time zone changes or you press the button.
+
+These requests are the only network calls Daylight makes. Set a weather
 location in Omarchy and Daylight makes none.
+
+Changing the location, like changing any setting, never switches the theme by
+itself. Daylight moves its bookmark to the current sunrise or sunset and waits
+for the next one to pass.
 
 ## Files
 

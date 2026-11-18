@@ -1,13 +1,28 @@
 // What the bar widget and panel show, as pure functions (no QML, no I/O).
+.import "Util.js" as Util
 
-// Strip markup so a theme name is safe in components whose inner Text this
-// plugin cannot set to PlainText (dropdown rows, tooltips, notifications).
-function plainText(s) {
-  return String(s === undefined || s === null ? "" : s).replace(/<[^>]+>/g, "").trim()
+// The panel's keyboard cursor rows, top to bottom. The light and dark "edge"
+// rows are the sunrise and sunset offsets in sun mode and the light and dark
+// times in fixed mode. The refresh row exists only when the location comes
+// from the geo lookup.
+var ROW = {
+  lightTheme: 0,
+  darkTheme: 1,
+  mode: 2,
+  lightEdge: 3,
+  darkEdge: 4,
+  refreshLocation: 5,
+  switchNow: 6,
+  pause: 7
 }
 
-function slug(s) {
-  return plainText(s).toLowerCase().replace(/ /g, "-")
+// The row one step up (dy < 0) or down from `row`, skipping rows that are not
+// shown and stopping at the ends.
+function moveRow(row, dy, refreshVisible) {
+  var step = dy > 0 ? 1 : -1
+  var next = row + step
+  if (next === ROW.refreshLocation && !refreshVisible) next += step
+  return Math.max(ROW.lightTheme, Math.min(ROW.pause, next))
 }
 
 // Dropdown options for a theme picker. A saved theme that is not installed
@@ -17,10 +32,10 @@ function themeOptions(installed, saved) {
   var list = Array.isArray(installed) ? installed : []
   var found = false
   for (var i = 0; i < list.length; i++) {
-    if (saved && slug(list[i]) === slug(saved)) found = true
-    out.push({ value: list[i], label: plainText(list[i]) })
+    if (saved && Util.slug(list[i]) === Util.slug(saved)) found = true
+    out.push({ value: list[i], label: Util.plainText(list[i]) })
   }
-  if (saved && !found) out.unshift({ value: saved, label: plainText(saved) })
+  if (saved && !found) out.unshift({ value: saved, label: Util.plainText(saved) })
   return out
 }
 
@@ -47,19 +62,23 @@ function switchTarget(period, settings, installed) {
   if (!other) return null
   var list = Array.isArray(installed) ? installed : []
   for (var i = 0; i < list.length; i++) {
-    if (slug(list[i]) === slug(other)) return slug(other)
+    if (Util.slug(list[i]) === Util.slug(other)) return Util.slug(other)
   }
   return null
 }
 
 // Replace the hour or minute of an "HH:MM" time.
 function withTimePart(time, part, value) {
-  var p = String(time).split(":")
-  var h = parseInt(p[0], 10)
-  var m = parseInt(p[1], 10)
-  if (part === "hour") h = value
-  else m = value
-  return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m
+  var t = Util.parseTime(time) || { hour: 0, minute: 0 }
+  if (part === "hour") t.hour = value
+  else t.minute = value
+  return Util.formatTime(t.hour, t.minute)
+}
+
+// The hour or minute of an "HH:MM" time, for a number field.
+function timePart(time, part) {
+  var t = Util.parseTime(time) || { hour: 0, minute: 0 }
+  return part === "hour" ? t.hour : t.minute
 }
 
 // ---- Mode section: sun or fixed times ----

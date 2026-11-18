@@ -8,19 +8,11 @@
 //
 // Sun mode calculates sunrise and sunset locally (NOAA algorithm); with no
 // location it falls back to the fixed times and reports `fallback`.
-
-// A theme name in the form `omarchy theme set` and theme.name use.
-function themeSlug(name) {
-  return String(name === undefined || name === null ? "" : name)
-    .replace(/<[^>]+>/g, "")
-    .trim()
-    .toLowerCase()
-    .replace(/ /g, "-")
-}
+.import "Util.js" as Util
 
 function minutesOfDay(hhmm) {
-  var parts = String(hhmm).split(":")
-  return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)
+  var t = Util.parseTime(hhmm)
+  return t.hour * 60 + t.minute
 }
 
 // Epoch ms of local `minutes` after midnight on the local day `dayOffset` days
@@ -135,6 +127,14 @@ function boundaries(settings, now, location) {
   return merged
 }
 
+// True when the wall clock moved more than twice `intervalMs` (or backwards)
+// since the last heartbeat `lastBeat`. QML timers pause while the machine
+// sleeps, so a gap this large means a resume or a clock jump.
+function resumedAfterGap(lastBeat, now, intervalMs) {
+  if (typeof lastBeat !== "number") return false
+  return now < lastBeat || now - lastBeat > 2 * intervalMs
+}
+
 function evaluate(input) {
   var settings = input.settings
   var now = input.now
@@ -169,7 +169,20 @@ function evaluate(input) {
 
   var state = input.state
   var hasState = !!state && typeof state.lastBoundary === "number"
-  if (hasState && state.lastBoundary >= current.at) return result
+
+  // Only the passing of time crosses a boundary: `now` reaching the switch time
+  // the scheduler saw last. A settings or location edit moves boundaries
+  // without time passing, so it re-anchors the saved state to the current
+  // boundary and applies nothing. Old state without a next time compares
+  // boundaries instead.
+  if (hasState) {
+    var crossed = typeof state.nextAt === "number" ? now >= state.nextAt : state.lastBoundary < current.at
+    if (!crossed) {
+      result.record = state.lastBoundary !== current.at ||
+        (typeof state.nextAt === "number" && state.nextAt !== next.at)
+      return result
+    }
+  }
 
   // Paused: cross the boundary without applying, so unpausing mid-period does
   // not re-apply the current period's theme.
@@ -184,11 +197,17 @@ function evaluate(input) {
   result.record = true
   if (!target) return result
 
-  var slug = themeSlug(target)
-  if (slug === themeSlug(input.currentTheme)) return result
+  var slug = Util.slug(target)
+  if (slug === Util.slug(input.currentTheme)) return result
 
+  // `omarchy theme list` failed or came back empty: the installed themes are
+  // unknown, so skip without a notification or a record and retry next time.
   var installed = input.installedThemes
-  if (installed && installed.map(themeSlug).indexOf(slug) < 0) {
+  if (!Array.isArray(installed) || installed.length === 0) {
+    result.record = false
+    return result
+  }
+  if (installed.map(function (n) { return Util.slug(n) }).indexOf(slug) < 0) {
     result.missing = target
     return result
   }
