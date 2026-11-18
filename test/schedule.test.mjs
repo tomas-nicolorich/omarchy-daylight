@@ -214,11 +214,35 @@ test("a chosen theme that is no longer installed is reported, not applied", () =
   assert.equal(r.record, true)
 })
 
-test("paused never applies and does not record the boundary", () => {
+test("paused applies nothing, even at a new boundary", () => {
+  const r = run({ settings: { ...SETTINGS, paused: true }, state: { lastBoundary: at("2026-06-09T19:00") } })
+  assert.equal(r.apply, null)
+  assert.equal(r.missing, null)
+  assert.equal(r.period, "light")
+})
+
+test("paused still records the boundary it crossed", () => {
+  const r = run({ settings: { ...SETTINGS, paused: true }, state: { lastBoundary: at("2026-06-09T19:00") } })
+  assert.equal(r.record, true)
+  assert.equal(r.boundary, at("2026-06-10T07:00"))
+})
+
+test("unpausing mid-period does not re-apply the current period's theme", () => {
+  const paused = run({ settings: { ...SETTINGS, paused: true }, state: { lastBoundary: at("2026-06-09T19:00") } })
+  const after = run({ state: { lastBoundary: paused.boundary } })
+  assert.equal(after.apply, null)
+  assert.equal(after.record, false)
+})
+
+test("after unpausing, the next boundary applies its theme", () => {
+  const r = run({ now: at("2026-06-10T19:01"), currentTheme: "flexoki-light", state: { lastBoundary: at("2026-06-10T07:00") } })
+  assert.equal(r.apply, "tokyo-night")
+})
+
+test("paused with no saved state applies nothing and records the boundary", () => {
   const r = run({ settings: { ...SETTINGS, paused: true } })
   assert.equal(r.apply, null)
-  assert.equal(r.record, false)
-  assert.equal(r.period, "light")
+  assert.equal(r.record, true)
 })
 
 test("spring forward: the next switch is 07:00 on the local clock", () => {

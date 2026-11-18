@@ -167,11 +167,16 @@ function evaluate(input) {
     }
   }
 
-  if (settings.paused) return result
-
   var state = input.state
   var hasState = !!state && typeof state.lastBoundary === "number"
   if (hasState && state.lastBoundary >= current.at) return result
+
+  // Paused: cross the boundary without applying, so unpausing mid-period does
+  // not re-apply the current period's theme.
+  if (settings.paused) {
+    result.record = true
+    return result
+  }
 
   var target = current.period === "light" ? settings.lightTheme : settings.darkTheme
   if (!hasState && !(settings.lightTheme && settings.darkTheme)) return result
