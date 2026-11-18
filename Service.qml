@@ -9,6 +9,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.Commons as Commons
 import "Config.js" as Config
 import "Schedule.js" as Schedule
 
@@ -26,6 +27,11 @@ Item {
   readonly property string shellJsonPath: home + "/.config/omarchy/shell.json"
   readonly property string themeNameFile: stateHome + "/omarchy/current/theme.name"
   readonly property int maxIntervalMs: 5 * 60 * 1000
+
+  Commons.Translations {
+    id: strings
+    directory: Qt.resolvedUrl("i18n")
+  }
 
   property var shellJson: null
   property bool settingsLoaded: false
@@ -64,7 +70,8 @@ Item {
     } else if (result.missing) {
       var name = String(result.missing).replace(/<[^>]+>/g, "")
       Quickshell.execDetached(["bash", "-lc", 'exec "$@"', "bash", "omarchy-notification-send",
-        "-u", "normal", "Daylight", "Theme \"" + name + "\" is not installed, so Daylight skipped the switch."])
+        "-u", "normal", "Daylight",
+        strings.t("notification.missingTheme", "Theme \"%1\" is not installed, so Daylight skipped the switch.").arg(name)])
     }
     if (result.record) saveBoundary(result.boundary)
 

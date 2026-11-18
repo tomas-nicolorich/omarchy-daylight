@@ -6,9 +6,17 @@
   "author": "Tomas Nicolorich",
   "license": "MIT",
   "description": "Switches Omarchy between a light and a dark theme at sunrise and sunset, or at fixed times.",
-  "kinds": ["service"],
+  "kinds": ["service", "bar-widget"],
   "keepLoaded": true,
   "entryPoints": {
-    "service": "Service.qml"
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Daylight",
+    "description": "Sun or moon icon for the current theme period, with a panel to choose themes and times.",
+    "category": "Appearance",
+    "allowMultiple": false,
+    "defaultSection": "centerEnd"
   }
 }

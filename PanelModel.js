@@ -1,0 +1,51 @@
+// What the bar widget and panel show, as pure functions (no QML, no I/O).
+
+// Strip markup so a theme name is safe in components whose inner Text this
+// plugin cannot set to PlainText (dropdown rows, tooltips, notifications).
+function plainText(s) {
+  return String(s === undefined || s === null ? "" : s).replace(/<[^>]+>/g, "").trim()
+}
+
+function slug(s) {
+  return plainText(s).toLowerCase().replace(/ /g, "-")
+}
+
+// Dropdown options for a theme picker. A saved theme that is not installed
+// stays in the list (first) so the picker shows what is saved.
+function themeOptions(installed, saved) {
+  var out = []
+  var list = Array.isArray(installed) ? installed : []
+  var found = false
+  for (var i = 0; i < list.length; i++) {
+    if (saved && slug(list[i]) === slug(saved)) found = true
+    out.push({ value: list[i], label: plainText(list[i]) })
+  }
+  if (saved && !found) out.unshift({ value: saved, label: plainText(saved) })
+  return out
+}
+
+// True until both themes are chosen.
+function needsThemes(settings) {
+  return !(settings && settings.lightTheme && settings.darkTheme)
+}
+
+// `result` is Schedule.evaluate's output.
+function summary(result, settings) {
+  var next = result.next.period
+  return {
+    period: result.period,
+    nextAt: result.next.at,
+    nextPeriod: next,
+    nextTheme: (next === "light" ? settings.lightTheme : settings.darkTheme) || ""
+  }
+}
+
+// Replace the hour or minute of an "HH:MM" time.
+function withTimePart(time, part, value) {
+  var p = String(time).split(":")
+  var h = parseInt(p[0], 10)
+  var m = parseInt(p[1], 10)
+  if (part === "hour") h = value
+  else m = value
+  return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m
+}
