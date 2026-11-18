@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url"
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..")
 const load = (file, names) =>
   new Function(`${readFileSync(join(REPO, file), "utf8")}\nreturn { ${names} };`)()
-const Panel = load("PanelModel.js", "plainText, themeOptions, needsThemes, summary, withTimePart")
+const Panel = load("PanelModel.js", "plainText, themeOptions, needsThemes, summary, withTimePart, modeView")
 
 test("markup in a theme name is neutralised for display", () => {
   assert.equal(Panel.plainText("<b>Flexoki</b> Light"), "Flexoki Light")
@@ -53,4 +53,31 @@ test("the summary has no target theme when none is chosen", () => {
 test("editing the hour or minute of a time keeps the other part", () => {
   assert.equal(Panel.withTimePart("07:30", "hour", 9), "09:30")
   assert.equal(Panel.withTimePart("07:30", "minute", 5), "07:05")
+})
+
+// Mode section (sun or fixed).
+test("sun mode with a location shows offsets and today's sun times", () => {
+  const v = Panel.modeView({ fallback: null, sun: { state: "normal", sunrise: 100, sunset: 200 } }, { mode: "sun" })
+  assert.deepEqual(v, { mode: "sun", showOffsets: true, showTimes: false, noLocation: false,
+    sunState: "normal", sunrise: 100, sunset: 200 })
+})
+
+test("fixed mode shows the light and dark times and no sun times", () => {
+  const v = Panel.modeView({ fallback: null, sun: null }, { mode: "fixed" })
+  assert.deepEqual(v, { mode: "fixed", showOffsets: false, showTimes: true, noLocation: false,
+    sunState: null, sunrise: null, sunset: null })
+})
+
+test("sun mode with no location reports the fallback and shows the fixed times", () => {
+  const v = Panel.modeView({ fallback: "noLocation", sun: null }, { mode: "sun" })
+  assert.equal(v.noLocation, true)
+  assert.equal(v.showTimes, true)
+  assert.equal(v.showOffsets, false)
+  assert.equal(v.sunrise, null)
+})
+
+test("polar days carry their state and no times", () => {
+  const v = Panel.modeView({ fallback: null, sun: { state: "polarNight", sunrise: null, sunset: null } }, { mode: "sun" })
+  assert.equal(v.sunState, "polarNight")
+  assert.equal(v.sunrise, null)
 })
