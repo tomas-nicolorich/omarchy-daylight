@@ -81,7 +81,7 @@ If the user changes the theme by hand, the plugin respects it until the next sch
 - **Bar widget**: sun icon in the light period, moon icon in the dark period, a dimmed or paused variant while paused. Tooltip: next switch time and target theme.
 - **Panel**: built on Omarchy's `KeyboardPanel` and kit components from `qs.Ui`, colors from the shell theme, motion via `Style.duration` and the Omarchy easing rules. Contents: light and dark theme pickers (from the installed theme list), mode toggle, offsets or times depending on mode, today's sunrise and sunset, next switch, Switch now, Pause.
 - **Switch now**: applies the other period's theme and counts as a manual change: the schedule resumes at the next boundary.
-- **Translations**: all user-facing strings in `i18n/en.json`, read through `Commons.Translations`; times formatted with `Qt.locale(Commons.I18n.formatLocale)`.
+- **Translations**: all user-facing strings in `i18n/en.json`, read through `Commons.Translations`; times formatted with `Qt.locale(Commons.I18n.formatLocale)`, so they follow the shell's format locale (12-hour or 24-hour).
 - **Safety**: all displayed dynamic text (theme names, location name) uses `Text.PlainText`. Theme names from settings are validated against the installed theme list before use.
 - **Publishing**: MIT license, README with preview image, `manifest.json` at repo root with `schemaVersion`, `id`, `name`, `version`, `author`, `license`, `description`, `kinds`, `entryPoints`, `barWidget`. Must pass `omarchy plugin validate`. Submission is through the GitHub issue form on omacom/omarchy-plugin-marketplace (done by Tomas, not the agent).
 
