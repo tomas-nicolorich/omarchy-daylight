@@ -17,6 +17,6 @@
     "description": "Sun or moon icon for the current theme period, with a panel to choose themes and times.",
     "category": "Appearance",
     "allowMultiple": false,
-    "defaultSection": "centerEnd"
+    "defaultSection": "center"
   }
 }
