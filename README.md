@@ -93,7 +93,8 @@ for the next one to pass.
 ## Files
 
 Daylight writes one file of its own, `~/.local/state/omarchy/daylight-state.json`
-(the last switch it acted on and the saved location). Its settings live in
+(the last switch it acted on, the saved location and the bar background for
+each period). Its settings live in
 `shell.json`. Removing the plugin leaves nothing else behind; delete the state
 file and the `tomas.daylight` entry in `shell.json` to clear those too.
 
