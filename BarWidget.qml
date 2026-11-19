@@ -66,7 +66,7 @@ BarWidget {
   readonly property var modeInfo: Model.modeView(root.evaluation, root.activeSettings)
 
   function clock(ms) {
-    return ms === null ? "" : new Date(ms).toLocaleTimeString(root.locale, "HH:mm")
+    return ms === null ? "" : new Date(ms).toLocaleTimeString(root.locale, Locale.ShortFormat)
   }
 
   function translate(key, fallback) {
